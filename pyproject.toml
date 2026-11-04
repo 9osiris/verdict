@@ -1,0 +1,23 @@
+[build-system]
+requires-python = ">=3.9"
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "verdict"
+version = "1.0.0"
+description = "score whole agent runs, not just replies"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "osiris" }]
+keywords = ["ai", "agents", "evals", "llm", "developer-tools"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+]
+
+[project.scripts]
+verdict = "verdict.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/9osiris/verdict"
