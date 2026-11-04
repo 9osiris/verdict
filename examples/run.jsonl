@@ -1,0 +1,6 @@
+{"role": "user", "content": "add a retry flag to the deploy script"}
+{"role": "assistant", "content": "let me look at the script first."}
+{"role": "tool", "name": "read_file", "content": "#!/bin/sh\ndeploy() { rsync -a . prod:/srv/app; }\ndeploy"}
+{"role": "assistant", "content": "found it. adding --retry with a default of 3."}
+{"role": "tool", "name": "edit_file", "content": "patched deploy.sh: added --retry flag"}
+{"role": "assistant", "content": "done. the deploy script now takes --retry N (default 3) and re-runs rsync on failure."}
