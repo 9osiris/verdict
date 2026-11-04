@@ -1,0 +1,1 @@
+[{"max":20,"name":"stays in budget","type":"max_steps"},{"name":"reads before editing","tools":["read_file","edit_file"],"type":"milestones"},{"name":"no forbidden tools","tools":["run_shell"],"type":"forbidden_tools"},{"name":"no tool errors","type":"no_errors"},{"max":0.1,"name":"cheap run","type":"max_cost"}]
