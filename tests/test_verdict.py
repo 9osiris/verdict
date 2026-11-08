@@ -1,4 +1,3 @@
-[pasted verbatim from local file - full content follows]
 import io
 import json
 import os
@@ -16,7 +15,8 @@ from verdict.trace import (Turn, Trace, parse_jsonl, parse_mule_log,
 from verdict.checks import (CheckResult, load_checks, run_checks, summarize)
 from verdict.judge import (judge, parse_judgement, build_messages,
                            JudgeError)
-from verdict.report import score_table, bench_table, as_json
+from verdict.report import score_table, bench_table, history_table, as_json
+from verdict.history import make_record, record, load, default_path
 from verdict.cli import main
 
 passed = failed = 0
@@ -327,6 +327,56 @@ empty = os.path.join(d, "empty")
 os.mkdir(empty)
 code, _ = run_cli(["bench", empty, "-c", noerr])
 check("cli bench empty dir exit 2", code == 2)
+
+# bench history
+
+rec = make_record("checks.json",
+                  [("a.jsonl", [CheckResult("x", "pass"),
+                                CheckResult("y", "fail")]),
+                   ("b.jsonl", [CheckResult("x", "pass")])])
+check("history record totals",
+      rec["pass"] == 2 and rec["fail"] == 1 and rec["skip"] == 0
+      and rec["checks"] == "checks.json"
+      and rec["traces"][0]["source"] == "a.jsonl"
+      and rec["traces"][0]["status"] == "fail"
+      and rec["traces"][1]["status"] == "ok"
+      and "T" in rec["ts"])
+hpath = os.path.join(d, "hist.jsonl")
+record(hpath, rec)
+record(hpath, rec)
+check("history roundtrip", len(load(hpath)) == 2)
+with open(hpath, "a") as f:
+    f.write("not json\n")
+    f.write('{"nope": true}\n')
+check("history skips corrupt lines", len(load(hpath)) == 2)
+check("history missing file", load(os.path.join(d, "nope.jsonl")) == [])
+check("history default path",
+      default_path().endswith(os.path.join(".verdict", "history.jsonl")))
+recs = [dict(rec, ts="2026-11-07T10:00:00Z", **{"pass": 2, "fail": 2,
+                                                 "skip": 0}),
+        dict(rec, ts="2026-11-08T10:00:00Z", **{"pass": 4, "fail": 0,
+                                                 "skip": 0})]
+out = history_table(recs)
+check("history table newest first",
+      out.index("2026-11-08") < out.index("2026-11-07")
+      and "+50%" in out and "4 passed, 0 failed" in out)
+out = history_table(recs, limit=1)
+check("history table limit", "2026-11-08" in out
+      and "2026-11-07" not in out)
+
+code, out = run_cli(["bench", td, "-c", noerr, "--record",
+                     "--history-file", hpath])
+check("cli bench --record writes history",
+      code == 1 and len(load(hpath)) == 3)
+code, out = run_cli(["history", "--history-file", hpath])
+check("cli history shows runs", "traces" in out and "passed" in out)
+code, out = run_cli(["history", "--history-file", hpath, "--json"])
+dd = json.loads(out)
+check("cli history --json",
+      dd["verdict"] == "history" and len(dd["data"]) == 3)
+code, out = run_cli(["history", "--history-file",
+                     os.path.join(d, "empty.jsonl")])
+check("cli history empty", "no bench runs" in out and code is None)
 
 # judge
 
