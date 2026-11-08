@@ -42,7 +42,14 @@ verdict judge run.jsonl -r rubric.md --model gpt-4o-mini
 
 verdict bench ./traces -c checks.json
   scores every trace file in a directory, one row each. good for a folder
-  of recorded runs.
+  of recorded runs. --record saves the run to ~/.verdict/history.jsonl
+  (or --history-file PATH), so trends survive between runs.
+
+verdict history
+  lists past bench runs, newest first, with the pass-rate change against
+  the previous run. --limit N shows fewer, --json dumps the raw records.
+  the history file is plain jsonl, one line per run, safe to read or
+  delete by hand.
 
 trace formats:
   jsonl: one json object per line, {"role": "user"|"assistant"|"tool",
@@ -61,5 +68,5 @@ checks.json is a list of {"type": ..., "name": optional, ...params}:
   final_regex {"pattern": ...}, no_errors {}, max_cost {"max": usd},
   max_duration {"max_ms": n}.
 
-tests: python3 tests/test_verdict.py, 93 checks, no deps. judge tests run
+tests: python3 tests/test_verdict.py, 104 checks, no deps. judge tests run
 against a fake local openai-compatible server, no key needed.
