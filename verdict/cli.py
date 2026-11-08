@@ -10,7 +10,8 @@ from . import __version__
 from .trace import load_trace
 from .checks import load_checks, run_checks, summarize
 from .judge import judge, JudgeError
-from .report import score_table, judge_text, bench_table, as_json
+from .report import score_table, judge_text, bench_table, history_table, as_json
+from .history import default_path, make_record, record, load as load_history
 
 
 CHECKS_TEMPLATE = """[
@@ -137,7 +138,23 @@ def cmd_bench(args):
              "summary": summarize(res)} for s, res in rows]))
     else:
         print(bench_table(rows))
+    if args.record:
+        path = args.history_file or default_path()
+        record(path, make_record(args.checks, rows))
+        print("recorded bench run to %s" % path, file=sys.stderr)
     sys.exit(1 if failed_any else 0)
+
+
+def cmd_history(args):
+    path = args.history_file or default_path()
+    records = load_history(path)
+    if not records:
+        print("no bench runs recorded yet (use bench --record)")
+        return
+    if args.json:
+        print(as_json("history", records[-args.limit:]))
+    else:
+        print(history_table(records, args.limit))
 
 
 def build_parser():
@@ -174,7 +191,18 @@ def build_parser():
     pb.add_argument("--format", default="auto",
                     choices=["auto", "jsonl", "mule", "council"])
     pb.add_argument("--json", action="store_true")
+    pb.add_argument("--record", action="store_true",
+                    help="save this run to the bench history")
+    pb.add_argument("--history-file", default=None,
+                    help="history file (default ~/.verdict/history.jsonl)")
     pb.set_defaults(func=cmd_bench)
+
+    ph = sub.add_parser("history", help="show past bench runs")
+    ph.add_argument("--limit", type=int, default=10)
+    ph.add_argument("--json", action="store_true")
+    ph.add_argument("--history-file", default=None,
+                    help="history file (default ~/.verdict/history.jsonl)")
+    ph.set_defaults(func=cmd_history)
     return p
 
 
