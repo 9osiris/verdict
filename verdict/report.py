@@ -45,5 +45,28 @@ def bench_table(rows):
     return "\n".join(lines)
 
 
+def history_table(records, limit=10):
+    # records are oldest first; show newest first, with the pass-rate
+    # delta against the previous run (the first run has nothing to
+    # compare to, so it shows "-")
+    rows = []
+    prev_rate = None
+    for rec in records:
+        total = rec["pass"] + rec["fail"] + rec["skip"]
+        rate = rec["pass"] / total if total else 1.0
+        if prev_rate is None:
+            delta = "-"
+        else:
+            delta = "%+d%%" % round((rate - prev_rate) * 100)
+        prev_rate = rate
+        rows.append((rec, total, delta))
+    lines = []
+    for rec, total, delta in rows[-limit:][::-1]:
+        lines.append("  %s  %d traces  %d passed, %d failed, %d skipped  %s" %
+                     (rec["ts"][:10], len(rec["traces"]), rec["pass"],
+                      rec["fail"], rec["skip"], delta))
+    return "\n".join(lines)
+
+
 def as_json(kind, payload):
     return json.dumps({"verdict": kind, "data": payload}, indent=2)
