@@ -15,7 +15,9 @@ from verdict.trace import (Turn, Trace, parse_jsonl, parse_mule_log,
 from verdict.checks import (CheckResult, load_checks, run_checks, summarize)
 from verdict.judge import (judge, parse_judgement, build_messages,
                            JudgeError)
-from verdict.report import score_table, bench_table, history_table, as_json
+from verdict.report import (score_table, bench_table, history_table,
+                            diff_table, as_json)
+from verdict.diff import diff_traces
 from verdict.history import make_record, record, load, default_path
 from verdict.cli import main
 
@@ -479,6 +481,107 @@ dd = json.loads(out)
 check("cli judge exit 1 + json",
       code == 1 and dd["data"]["verdict"] == "fail")
 srv.shutdown()
+
+# trace diff
+
+RUN2_JSONL = os.path.join(EX, "run2.jsonl")
+
+
+def _mk_trace(turns, cost=None, duration_ms=None):
+    return Trace("t", turns, cost=cost, duration_ms=duration_ms)
+
+
+def _rows(d):
+    return {r["metric"]: r for r in d["rows"]}
+
+
+base = _mk_trace([
+    Turn("user", "do the thing"),
+    Turn("assistant", "looking"),
+    Turn("tool", "ok", name="read_file"),
+    Turn("tool", "ok", name="edit_file"),
+    Turn("assistant", "line one\nline two\nline three")],
+    cost=0.02, duration_ms=1200)
+same = _mk_trace([
+    Turn("user", "do the thing"),
+    Turn("assistant", "looking"),
+    Turn("tool", "ok", name="read_file"),
+    Turn("tool", "ok", name="edit_file"),
+    Turn("assistant", "line one\nline two\nline three")],
+    cost=0.02, duration_ms=1200)
+d = diff_traces(base, same)
+check("diff identical traces are same",
+      d["same"] and all(r["same"] for r in d["rows"]))
+
+fewer = _mk_trace([
+    Turn("user", "do the thing"),
+    Turn("tool", "ok", name="read_file"),
+    Turn("assistant", "line one\nline two\nline three")],
+    cost=0.01, duration_ms=800)
+d = diff_traces(base, fewer)
+r = _rows(d)
+check("diff counts tool calls and turns",
+      not d["same"] and r["turns"]["a"] == 5 and r["turns"]["b"] == 3
+      and r["tool calls"]["a"] == 2 and r["tool calls"]["b"] == 1)
+check("diff tool detail names the split",
+      "shared prefix: read_file" in r["tools"]["detail"]
+      and "a continues with edit_file" in r["tools"]["detail"])
+check("diff cost detail signs the gap",
+      r["cost"]["a"] == "$0.0200" and r["cost"]["b"] == "$0.0100"
+      and "more" in r["cost"]["detail"])
+check("diff duration detail signs the gap",
+      r["duration"]["a"] == 1200 and "slower" in r["duration"]["detail"])
+
+nocost = _mk_trace(base.turns)
+d = diff_traces(base, nocost)
+r = _rows(d)
+check("diff missing cost is unknown not different",
+      r["cost"]["same"] is None and "no cost data in b" in r["cost"]["detail"]
+      and d["same"])
+d = diff_traces(nocost, nocost)
+check("diff both missing duration is unknown",
+      _rows(d)["duration"]["same"] is None)
+
+other_answer = _mk_trace(base.turns[:-1] + [
+    Turn("assistant", "line one\nline TWO\nline three")],
+    cost=0.02, duration_ms=1200)
+d = diff_traces(base, other_answer)
+r = _rows(d)
+check("diff final answer finds the first differing line",
+      not r["final answer"]["same"]
+      and "line 2" in r["final answer"]["detail"]
+      and "line two" in r["final answer"]["detail"]
+      and "line TWO" in r["final answer"]["detail"])
+
+no_answer = _mk_trace(base.turns[:-1], cost=0.02, duration_ms=1200)
+d = diff_traces(base, no_answer)
+check("diff missing final answer is a difference",
+      not _rows(d)["final answer"]["same"])
+
+table = diff_table(diff_traces(base, fewer))
+check("diff table marks differing rows and counts them",
+      "<>" in table and "5 differences" in table)
+check("diff table shows cost as money and duration in ms",
+      "$0.0200" in table and "1200ms" in table)
+check("diff table marks unknown rows with ?",
+      "?" in diff_table(diff_traces(base, nocost)))
+table = diff_table(diff_traces(base, same))
+check("diff table on identical traces says 0 differences",
+      "0 differences" in table and "<>" not in table)
+
+code, out = run_cli(["diff", RUN_JSONL, RUN_JSONL])
+check("cli diff same trace exit 0", code == 0 and "0 differences" in out)
+code, out = run_cli(["diff", RUN_JSONL, RUN2_JSONL])
+check("cli diff different traces exit 1",
+      code == 1 and "final answer: differs" in out
+      and "read_file -> edit_file" in out)
+code, out = run_cli(["diff", RUN_JSONL, RUN2_JSONL, "--json"])
+dd = json.loads(out)
+check("cli diff --json shape",
+      code == 1 and dd["verdict"] == "diff" and dd["data"]["same"] is False
+      and len(dd["data"]["rows"]) == 6)
+code, out = run_cli(["diff", RUN_JSONL, "/tmp/no-such-trace.jsonl"])
+check("cli diff missing file exit 2", code == 2)
 
 print()
 print("%d passed, %d failed" % (passed, failed))
