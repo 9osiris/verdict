@@ -68,5 +68,47 @@ def history_table(records, limit=10):
     return "\n".join(lines)
 
 
+def _fmt(v):
+    if v is None:
+        return "-"
+    return str(v)
+
+
+def diff_table(result):
+    # result is the dict from diff.diff_traces
+    lines = ["verdict diff: %s vs %s" % (result["a"], result["b"]), ""]
+    def _disp(r, side):
+        v = _fmt(r[side])
+        if r["metric"] == "duration" and r[side] is not None:
+            v += "ms"
+        return v
+
+    rows = [r for r in result["rows"] if r["metric"] != "final answer"]
+    width = max([len(r["metric"]) for r in rows] + [5])
+    aw = max([len(_disp(r, "a")) for r in rows] + [1])
+    for r in rows:
+        mark = ""
+        if r["same"] is False:
+            mark = "  <>"
+        elif r["same"] is None:
+            mark = "  ?"
+        lines.append("  %-*s  %-*s  %s%s" %
+                     (width, r["metric"], aw, _disp(r, "a"), _disp(r, "b"), mark))
+        if r["detail"]:
+            lines.append("    %s" % r["detail"])
+    fa = [r for r in result["rows"] if r["metric"] == "final answer"][0]
+    lines.append("")
+    if fa["same"]:
+        lines.append("  final answer: same")
+    else:
+        lines.append("  final answer: differs")
+        if fa["detail"]:
+            lines.append("  %s" % fa["detail"].replace("\n", "\n  "))
+    diffs = sum(1 for r in result["rows"] if r["same"] is False)
+    lines.append("")
+    lines.append("%d difference%s" % (diffs, "" if diffs == 1 else "s"))
+    return "\n".join(lines)
+
+
 def as_json(kind, payload):
     return json.dumps({"verdict": kind, "data": payload}, indent=2)
