@@ -51,6 +51,16 @@ verdict history
   the history file is plain jsonl, one line per run, safe to read or
   delete by hand.
 
+verdict diff run1.jsonl run2.jsonl
+  compares two runs of the same task, side by side: turns, tool calls,
+  the tool sequence, cost, duration, and the final answer. a tool
+  sequence that splits shows the shared prefix and what each side did
+  after it; a final answer that differs shows the first differing line.
+  rows a trace has no data for (cost on a council transcript, duration
+  on a mule log) show as ? instead of a difference, because a missing
+  number is not a difference. exits 0 when the runs match, 1 when
+  anything differs, 2 on broken input. --json prints the rows.
+
 trace formats:
   jsonl: one json object per line, {"role": "user"|"assistant"|"tool",
   "content": ..., "name": ...} (verdict's own {"kind": ...} works too).
@@ -68,5 +78,5 @@ checks.json is a list of {"type": ..., "name": optional, ...params}:
   final_regex {"pattern": ...}, no_errors {}, max_cost {"max": usd},
   max_duration {"max_ms": n}.
 
-tests: python3 tests/test_verdict.py, 104 checks, no deps. judge tests run
+tests: python3 tests/test_verdict.py, 121 checks, no deps. judge tests run
 against a fake local openai-compatible server, no key needed.
