@@ -1,4 +1,4 @@
-"""cli: init, score, judge, bench."""
+"""cli: init, score, judge, bench, history, diff."""
 
 import argparse
 import glob
@@ -10,8 +10,10 @@ from . import __version__
 from .trace import load_trace
 from .checks import load_checks, run_checks, summarize
 from .judge import judge, JudgeError
-from .report import score_table, judge_text, bench_table, history_table, as_json
+from .report import (score_table, judge_text, bench_table, history_table,
+                     diff_table, as_json)
 from .history import default_path, make_record, record, load as load_history
+from .diff import diff_traces
 
 
 CHECKS_TEMPLATE = """[
@@ -157,6 +159,17 @@ def cmd_history(args):
         print(history_table(records, args.limit))
 
 
+def cmd_diff(args):
+    a = _load_trace_or_die(args.a, args.format)
+    b = _load_trace_or_die(args.b, args.format)
+    result = diff_traces(a, b)
+    if args.json:
+        print(as_json("diff", result))
+    else:
+        print(diff_table(result))
+    sys.exit(0 if result["same"] else 1)
+
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="verdict",
@@ -203,6 +216,14 @@ def build_parser():
     ph.add_argument("--history-file", default=None,
                     help="history file (default ~/.verdict/history.jsonl)")
     ph.set_defaults(func=cmd_history)
+
+    pd = sub.add_parser("diff", help="compare two traces of the same task")
+    pd.add_argument("a")
+    pd.add_argument("b")
+    pd.add_argument("--format", default="auto",
+                    choices=["auto", "jsonl", "mule", "council"])
+    pd.add_argument("--json", action="store_true")
+    pd.set_defaults(func=cmd_diff)
     return p
 
 
